@@ -1,0 +1,5 @@
+description: 'https://issues.redhat.com/browse/OCPQE-5743'
+match_ordered_strings:
+- '=== After Scenario:'
+- 'the server is currently unable to handle the request \(get projects.project.openshift.io\)'
+- 'RuntimeError: error getting projects by user'
