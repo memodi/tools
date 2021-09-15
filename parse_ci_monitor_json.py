@@ -17,10 +17,10 @@ def argparser():
     )
 
     parser.add_argument(
-        "-f",
-        "--files",
+        "-r",
+        "--runs",
         nargs="+",
-        help="space seperated values of test run JSON files generated from ci_monitor tool",
+        help="space seperated list of test run ids.",
     )
     parser.add_argument(
         "-o",
@@ -67,6 +67,32 @@ def get_owner(ascript: str, testid: str):
     return owner
 
 
+def get_testrun_json(run_id: str):
+    """Download the test case json data from polarshift."""
+
+    # Call $BUSHSLICER_HOME/tools/polarshift.rb get-run RUN_ID to download the json describing the test run
+    BUSHSLICER_HOME = os.getenv("BUSHSLICER_HOME")
+    # use -o to avoid extra non json garbage printed to stdout
+    cmd = [
+        f"{BUSHSLICER_HOME}/tools/polarshift.rb",
+        "get-run",
+        f"{run_id}",
+        "-o",
+        f"{run_id}.json",
+    ]
+    subprocess.check_output(cmd)
+    run_json = get_json_from_file(f"{run_id}.json")
+    return run_json
+
+
+def get_json_from_file(file_path: str):
+    """Read in json from file_path."""
+
+    with open(file_path, "r") as f:
+        content = json.load(f)
+    return content
+
+
 def write_output(data: dict, ofile: str):
     with open(ofile, "w") as outfile:
         json.dump(data, outfile, indent=4, sort_keys=True)
@@ -74,40 +100,38 @@ def write_output(data: dict, ofile: str):
 
 def main():
     args = argparser()
-    logs_files = set(args.files)
     report_struct = {"version": args.version}
-    for file in logs_files:
-        with open(file) as fh:
-            output = json.load(fh)
-            profile = output["title"]
-            profile = re.search(".* - (.*)$", profile)
-            profile = profile.groups()[0]
-            for record in output["records"]["TestRecord"]:
-                if record["result"] == "Failed":
-                    linkto_logs = get_test_failure_profile(
-                        record["comment"]["content"], profile
-                    )
-                    automation_script = get_automation_script(
-                        record["test_case"]["customFields"]["Custom"]
-                    )
-                    id = record["test_case"]["id"]
-                    owner = get_owner(automation_script, id)
-                    if report_struct.get(owner, 0):
-                        if report_struct[owner].get(automation_script, 0):
-                            if report_struct[owner][automation_script].get(id, 0):
-                                report_struct[owner][automation_script][id].append(
-                                    linkto_logs
-                                )
-                            else:
-                                report_struct[owner][automation_script].update(
-                                    {id: [linkto_logs]}
-                                )
+    for run in args.runs:
+        output = get_testrun_json(run)
+        profile = output["title"]
+        profile = re.search(".* - (.*)$", profile)
+        profile = profile.groups()[0]
+        for record in output["records"]["TestRecord"]:
+            if record["result"] == "Failed":
+                linkto_logs = get_test_failure_profile(
+                    record["comment"]["content"], profile
+                )
+                automation_script = get_automation_script(
+                    record["test_case"]["customFields"]["Custom"]
+                )
+                id = record["test_case"]["id"]
+                owner = get_owner(automation_script, id)
+                if report_struct.get(owner, 0):
+                    if report_struct[owner].get(automation_script, 0):
+                        if report_struct[owner][automation_script].get(id, 0):
+                            report_struct[owner][automation_script][id].append(
+                                linkto_logs
+                            )
                         else:
-                            report_struct[owner].update(
-                                {automation_script: {id: [linkto_logs]}}
+                            report_struct[owner][automation_script].update(
+                                {id: [linkto_logs]}
                             )
                     else:
-                        report_struct[owner] = {automation_script: {id: [linkto_logs]}}
+                        report_struct[owner].update(
+                            {automation_script: {id: [linkto_logs]}}
+                        )
+                else:
+                    report_struct[owner] = {automation_script: {id: [linkto_logs]}}
 
     write_output(report_struct, args.output)
 
