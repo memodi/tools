@@ -6,9 +6,10 @@ import re
 import sys
 import os
 import subprocess
-import pprint
 from datetime import datetime
 from typing import List
+
+from issue_finder import IssuesFinder
 
 
 def argparser():
@@ -28,14 +29,31 @@ def argparser():
         help="location to write output file",
         default=f"./{datetime.today().strftime('%Y%m%d')}.json",
     )
-    parser.add_argument("-v", "--version", help="Specify OCP version", required=True)
+    parser.add_argument(
+        "-i",
+        "--issues",
+        action="store_true",
+        help="Searching for known issues.",
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        help="Specify OCP version",
+        required=True,
+    )
     return parser.parse_args()
 
 
-def get_test_failure_profile(content: str, profile: str):
+def get_link_to_log(content: str):
     content = re.search("(http.*)", content)
     if content:
-        linkto_logs = "[Link to logs|" + content.groups()[0] + "]|" + profile
+        return content.groups()[0]
+
+
+def get_test_failure_profile(content: str, profile: str):
+    content = get_link_to_log(content)
+    if content:
+        linkto_logs = "[Link to logs|" + content + "]|" + profile
     else:
         linkto_logs = f"not found|{profile}"
     return linkto_logs
@@ -132,6 +150,17 @@ def main():
                         )
                 else:
                     report_struct[owner] = {automation_script: {id: [linkto_logs]}}
+                # Find known issues
+                if args.issues:
+                    issue_finder = IssuesFinder()
+                    issues = issue_finder.find_issues(
+                        get_link_to_log(record["comment"]["content"])
+                    )
+                    if issues:
+                        print(f"Found issues for {id}: {issues}")
+                        report_struct[owner][automation_script][id].append(
+                            dict([("known_issues", issues)])
+                        )
 
     write_output(report_struct, args.output)
 

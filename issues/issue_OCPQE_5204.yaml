@@ -1,0 +1,4 @@
+description: 'https://issues.redhat.com/browse/OCPQE-5204'
+match_ordered_strings:
+- 'Scenario: Etcd basic verification ==='
+- 'RuntimeError: See log, waiting for labeled pods futile: k8s-app=etcd'
