@@ -8,7 +8,7 @@ import os
 import subprocess
 import pprint
 from datetime import datetime
-from typing import List
+from typing import List, Set
 
 
 def argparser():
@@ -28,7 +28,8 @@ def argparser():
         help="location to write output file",
         default=f"./{datetime.today().strftime('%Y%m%d')}.json",
     )
-    parser.add_argument("-v", "--version", help="Specify OCP version", required=True)
+    parser.add_argument("-v", "--version",
+                        help="Specify OCP version", required=True)
     return parser.parse_args()
 
 
@@ -96,11 +97,30 @@ def get_json_from_file(file_path: str):
 def write_output(data: dict, ofile: str):
     with open(ofile, "w") as outfile:
         json.dump(data, outfile, indent=4, sort_keys=True)
+    print(f"report written to {ofile}")
+
+
+def get_existing_report(outputFile: str) -> dict:
+    if os.path.exists(outputFile):
+        with open(outputFile, 'r') as fh:
+            return json.load(fh)
+    else:
+        return dict()
+
+
+def get_ocp_versions(report: dict) -> Set:
+    if report:
+        return set(report['version'])
+    else:
+        return set()
 
 
 def main():
     args = argparser()
-    report_struct = {"version": args.version}
+    report_struct = get_existing_report(args.output)
+    versions = get_ocp_versions(report_struct)
+    versions.add(args.version)
+    report_struct.update({"version": list(versions)})
     for run in args.runs:
         output = get_testrun_json(run)
         profile = output["title"]
@@ -111,6 +131,7 @@ def main():
                 linkto_logs = get_test_failure_profile(
                     record["comment"]["content"], profile
                 )
+                linkto_logs += f"|{args.version}|{run}"
                 automation_script = get_automation_script(
                     record["test_case"]["customFields"]["Custom"]
                 )
@@ -131,7 +152,8 @@ def main():
                             {automation_script: {id: [linkto_logs]}}
                         )
                 else:
-                    report_struct[owner] = {automation_script: {id: [linkto_logs]}}
+                    report_struct[owner] = {
+                        automation_script: {id: [linkto_logs]}}
 
     write_output(report_struct, args.output)
 
