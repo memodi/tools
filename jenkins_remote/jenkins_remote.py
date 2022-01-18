@@ -14,9 +14,10 @@ CI_MONITOR_JOBS = "ci_monitor/job"
 
 
 def destroy_cluster(args):
-    print(f"destroying cluster {args.build_number}")
+    nbuild_to_destroy = str(args.build_number)
+    print(f"destroying cluster {nbuild_to_destroy}")
     job_url = "Flexy-destroy"
-    params = f"BUILD_NUMBER={args.build_number}"
+    params = f"BUILD_NUMBER={nbuild_to_destroy}"
     destroy_job_url = (
         f"{JENKINS_URL}/{OCP_COMMON_JOBS}/{job_url}/buildWithParameters?{params}"
     )
@@ -27,7 +28,7 @@ def destroy_cluster(args):
     )
     if r.status_code == 201:
         nbuild = _get_jenkins_build_number(r.headers["location"])
-        print("triggered job: {nbuild}  to destroy cluster successfully")
+        print(f"triggered job: {nbuild}  to destroy cluster successfully")
 
 
 def ci_monitor(args):
@@ -116,12 +117,18 @@ def args_parser():
 
     destroy_parser = subparsers.add_parser("destroy")
     destroy_parser.add_argument(
-        "--build-number", "-n", required=True, help="flexy build number to destroy"
+        "--build-number",
+        "-n",
+        required=True,
+        type=int,
+        help="flexy build number to destroy",
     )
     destroy_parser.set_defaults(func=destroy_cluster)
 
     ci_parser = subparsers.add_parser("ci_monitor")
-    ci_parser.add_argument("--run-id", "-id", required=True, help="polarion run id")
+    ci_parser.add_argument(
+        "--run-id", "-id", type=int, required=True, help="polarion run id"
+    )
     ci_parser.add_argument(
         "--file-jira",
         "-fj",
