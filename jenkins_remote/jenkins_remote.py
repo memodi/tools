@@ -14,9 +14,10 @@ CI_MONITOR_JOBS = "ci_monitor/job"
 
 
 def destroy_cluster(args):
-    print(f"destroying cluster {args.build_number}")
+    nbuild_to_destroy = str(args.build_number)
+    print(f"destroying cluster {nbuild_to_destroy}")
     job_url = "Flexy-destroy"
-    params = f"BUILD_NUMBER={args.build_number}"
+    params = f"BUILD_NUMBER={nbuild_to_destroy}"
     destroy_job_url = (
         f"{JENKINS_URL}/{OCP_COMMON_JOBS}/{job_url}/buildWithParameters?{params}"
     )
@@ -27,7 +28,7 @@ def destroy_cluster(args):
     )
     if r.status_code == 201:
         nbuild = _get_jenkins_build_number(r.headers["location"])
-        print("triggered job: {nbuild}  to destroy cluster successfully")
+        print(f"triggered job: {nbuild}  to destroy cluster successfully")
 
 
 def ci_monitor(args):
@@ -88,11 +89,19 @@ def _get_jenkins_build_number(location):
 
 
 def args_parser():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        prog=os.path.basename(sys.argv[0]),
+        description="Jenkins Remote helps to trigger Flexy install and destroy jobs over CLI for versioned-installer-* profiles",
+    )
 
-    subparsers = parser.add_subparsers(dest="command")
+    subparsers = parser.add_subparsers(
+        dest="command",
+    )
     subparsers.required = True
-    install_parser = subparsers.add_parser("install")
+    install_parser = subparsers.add_parser(
+        "install",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     install_parser.add_argument(
         "-n", "--name", help="specify cluster name", required=True
     )
@@ -103,7 +112,7 @@ def args_parser():
         required=True,
     )
     install_parser.add_argument(
-        "-v", "--ocp-version", default="4.10", help="specify ocp version"
+        "-v", "--ocp-version", default="4.11", help="specify ocp version"
     )
     group = install_parser.add_mutually_exclusive_group()
     group.add_argument("--ipi", action="store_false", default=True)
@@ -114,14 +123,24 @@ def args_parser():
 
     install_parser.set_defaults(func=install_cluster)
 
-    destroy_parser = subparsers.add_parser("destroy")
+    destroy_parser = subparsers.add_parser(
+        "destroy", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
     destroy_parser.add_argument(
-        "--build-number", "-n", required=True, help="flexy build number to destroy"
+        "--build-number",
+        "-n",
+        required=True,
+        type=int,
+        help="flexy build number to destroy",
     )
     destroy_parser.set_defaults(func=destroy_cluster)
 
-    ci_parser = subparsers.add_parser("ci_monitor")
-    ci_parser.add_argument("--run-id", "-id", required=True, help="polarion run id")
+    ci_parser = subparsers.add_parser(
+        "ci_monitor", formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    ci_parser.add_argument(
+        "--run-id", "-id", type=int, required=True, help="polarion run id"
+    )
     ci_parser.add_argument(
         "--file-jira",
         "-fj",
