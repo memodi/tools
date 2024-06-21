@@ -6,6 +6,8 @@ import sys
 import os
 import json
 from datetime import datetime
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 JENKINS_URL = (
     "https://mastern-jenkins-csb-openshift-qe.apps.ocp-c1.prod.psi.redhat.com/job"
@@ -25,7 +27,7 @@ def destroy_cluster(args):
     r = requests.post(
         destroy_job_url,
         auth=(os.getenv("USER"), os.getenv("JENKINS_API_TOKEN")),
-        verify="/etc/certs/ipa.crt",
+        verify=False,
     )
     if r.status_code == 201:
         nbuild = _get_jenkins_build_number(r.headers["location"])
@@ -44,7 +46,7 @@ def ci_monitor(args):
     r = requests.post(
         ci_monitor_url,
         auth=(os.getenv("USER"), os.getenv("JENKINS_API_TOKEN")),
-        verify="/etc/certs/ipa.crt",
+        verify=False,
     )
     if r.status_code == 201:
         nbuild = _get_jenkins_build_number(r.headers["location"])
@@ -75,7 +77,7 @@ def install_cluster(args):
 
     git_localtion = f"https://gitlab.cee.redhat.com/aosqe/flexy-templates/-/raw/master/{path_to_profile}"
 
-    r = requests.get(git_localtion, verify="/etc/certs/ipa.crt")
+    r = requests.get(git_localtion, verify=False)
     if r.status_code != 200:
         raise Exception(f"profile {path_to_profile} not found")
     jenkins_path_to_profile = f"private-templates/{path_to_profile}"
@@ -87,7 +89,7 @@ def install_cluster(args):
     r = requests.post(
         flexy_job_url,
         auth=(os.getenv("USER"), os.getenv("JENKINS_API_TOKEN")),
-        verify="/etc/certs/ipa.crt",
+        verify=False,
         params={
             "INSTANCE_NAME_PREFIX": name,
             "VARIABLES_LOCATION": jenkins_path_to_profile,
@@ -121,7 +123,7 @@ def get_jenkins_launcher_vars(vars):
 
 
 def _get_jenkins_build_number(location):
-    nbuild_resp = requests.get(f"{location}/api/json", verify="/etc/certs/ipa.crt")
+    nbuild_resp = requests.get(f"{location}/api/json", verify=False)
     if nbuild_resp.status_code == 200:
         response = nbuild_resp.json()
         return response["executable"]["number"]
@@ -142,7 +144,7 @@ def args_parser():
         help="specify profile to install with, NOTE: currently profiles specified as versioned-installer-{profile} are only supported",
     )
     install_parser.add_argument(
-        "-v", "--ocp-version", default="4.11", help="specify ocp version"
+        "-v", "--ocp-version", default="4.17", help="specify ocp version"
     )
 
     install_parser.add_argument(
