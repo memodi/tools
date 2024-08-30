@@ -6,10 +6,13 @@ import sys
 import os
 import json
 from datetime import datetime
+import urllib3
+import time
 
-JENKINS_URL = (
-    "https://mastern-jenkins-csb-openshift-qe.apps.ocp-c1.prod.psi.redhat.com/job"
-)
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+JENKINS_URL = "https://mastern-jenkins-csb-openshift-qe.apps.ocp-c1.prod.psi.redhat.com"
+JENKINS_JOB_URL = f"{JENKINS_URL}/job"
 
 OCP_COMMON_JOBS = "ocp-common/job"
 CI_MONITOR_JOBS = "ci_monitor/job"
@@ -21,7 +24,7 @@ def destroy_cluster(args):
     job_url = "Flexy-destroy"
     params = f"BUILD_NUMBER={nbuild_to_destroy}"
     destroy_job_url = (
-        f"{JENKINS_URL}/{OCP_COMMON_JOBS}/{job_url}/buildWithParameters?{params}"
+        f"{JENKINS_JOB_URL}/{OCP_COMMON_JOBS}/{job_url}/buildWithParameters?{params}"
     )
     r = requests.post(
         destroy_job_url,
@@ -30,7 +33,7 @@ def destroy_cluster(args):
     )
     if r.status_code == 201:
         nbuild = _get_jenkins_build_number(r.headers["location"])
-        print(f"triggered job: {nbuild}  to destroy cluster successfully")
+        print(f"triggered job: {nbuild} to destroy cluster successfully")
 
 
 def ci_monitor(args):
@@ -40,7 +43,7 @@ def ci_monitor(args):
     job_url = "ci_failure_summary"
     params = f"TEST_RUN_ID={runid}&FILE_JIRA_ISSUES={toFileJira}"
     ci_monitor_url = (
-        f"{JENKINS_URL}/{CI_MONITOR_JOBS}/{job_url}/buildWithParameters?{params}"
+        f"{JENKINS_JOB_URL}/{CI_MONITOR_JOBS}/{job_url}/buildWithParameters?{params}"
     )
     r = requests.post(
         ci_monitor_url,
@@ -83,7 +86,7 @@ def install_cluster(args):
 
     print(f"successfully found profile {path_to_profile}")
 
-    flexy_job_url = f"{JENKINS_URL}/{OCP_COMMON_JOBS}/{job_url}/buildWithParameters"
+    flexy_job_url = f"{JENKINS_JOB_URL}/{OCP_COMMON_JOBS}/{job_url}/buildWithParameters"
 
     r = requests.post(
         flexy_job_url,
@@ -121,11 +124,35 @@ def get_jenkins_launcher_vars(vars):
     return built_vars
 
 
+def check_queue(id):
+    print(f"Job added in queue: {id}")
+    poll_max_time = 600
+    polltime = 0
+    while polltime <= poll_max_time:
+        queue_resp = requests.get(
+            f"{JENKINS_URL}/queue/item/{id}/api/json", verify=False
+        )
+        if queue_resp.status_code == 200:
+            response = queue_resp.json()
+            if response["why"] is None:
+                return response["executable"]["number"]
+            else:
+                print(f"Job still in queue, reason: {response["why"]}")
+        time.sleep(10)
+        polltime += 10
+
+
 def _get_jenkins_build_number(location):
     nbuild_resp = requests.get(f"{location}/api/json", verify="/etc/certs/ipa.crt")
     if nbuild_resp.status_code == 200:
         response = nbuild_resp.json()
-        return response["executable"]["number"]
+        # if resulting in KeyError, meaning job went to queue first
+        build_id = ""
+        try:
+            build_id = response["executable"]["number"]
+        except KeyError:
+            build_id = check_queue(response["id"])
+        return build_id
 
 
 def args_parser():
